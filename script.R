@@ -2,7 +2,7 @@ library(readr)
 library(dplyr)
 library(rpart)
 library(rpart.plot)
-library(caret)    
+library(caret)
 
 
 # Lectura de los datos
@@ -39,11 +39,7 @@ data$Cabin <- ifelse(na_logical, 'X', data$Cabin)
 char_cabin <- as.character(data$Cabin) # Convert to character
 
 
-new_Cabin <- ifelse(
-  char_cabin == "",
-  "",
-  substr(char_cabin, 1, 1)
-)    
+new_Cabin <- ifelse(char_cabin == "", "", substr(char_cabin, 1, 1))
 
 new_Cabin <- factor(new_Cabin)                # Convert back to a factor
 
@@ -72,40 +68,56 @@ boxplot(data$Fare)
 
 high_roller_index <- which.max(data$Fare)
 
-high_roller_index                   
+high_roller_index
 
-data[high_roller_index, ]   
+data[high_roller_index, ]
 
 
 # ARBOLES
+
+# Dividimos 70% entrenamiento / 30% prueba.
+
+set.seed(42) # Fija la semilla para que la división sea reproducible
+train_index <- createDataPartition(data$Survived, p = 0.8, list = FALSE)
+
+# Creamos los subconjuntos.
+train_data <- data[train_index, ]
+test_data  <- data[-train_index, ]
+
+
 
 # Configuramos las opciones de arbol.
 
 options(repr.plot.width = 6, repr.plot.height = 5)
 
-gender_tree <- rpart(Survived ~  Sex,              
-                     data = data)       
+gender_tree <- rpart(Survived ~  Sex, data = train_data)
 # Dibujo del Arbol
 
-prp(gender_tree,      
-    extra=102, type=2,  xsep="/")
+prp(gender_tree,
+    extra = 102,
+    type = 2,
+    xsep = "/")
 
-# Tenemos un total de 891 pasajeros, de los cuales 549 murieron. 468 de los pasajerons que murieron 
-# eran del género masculino y 81 eran del género femenino.
-# Del total de pasajeros, el 65% eran hombres y 35% mujeres.
+# Tenemos un total de 625 pasajeros, de los cuales 385 murieron. De los pasajerons que murieron
+# 324 eran del género masculino y 61 eran del género femenino.
+# Del total de pasajeros, el 63% eran hombres y 37% mujeres.
 
-
-complex_tree <- rpart(Survived ~ Sex + Pclass + Fare  + Age   ,
-                      cp = 0.012,                 # Set complexity parameter*
-                      data = data)       # Use the titanic training data
+complex_tree <- rpart(
+  Survived ~ Sex + Pclass + Fare  + Age   ,
+  cp = 0.015,
+  # Set complexity parameter*
+  data = train_data
+)       # Use the titanic training data
 
 options(repr.plot.width = 4, repr.plot.height = 4)
 
-prp(complex_tree, 
-    extra=102, type=2,  xsep="/")
+prp(complex_tree,
+    extra = 102,
+    type = 2,
+    xsep = "/")
 
-#printcp(complex_tree)
-#plotcp(complex_tree, upper = "splits")  
+printcp(complex_tree)
+plotcp(complex_tree, upper = "splits")
 
 #Esto te muestra:
 #El error de cross-validation vs. tamaño del árbol.
@@ -113,8 +125,40 @@ prp(complex_tree,
 
 # Predicciones.
 
-train_preds <- predict(complex_tree, 
-                       newdata = data, 
-                       type = "class")               # Return class predictions
+train_preds <- predict(complex_tree, newdata = test_data, type = "class")
 
-confusionMatrix(factor(train_preds), factor(data$Survived))
+confusionMatrix(factor(train_preds), factor(test_data$Survived))
+
+
+#CROSS VALIDATION
+
+# Create a trainControl object to control how the train function creates the model
+train_control <- trainControl(
+  method = "repeatedcv",
+  # Use cross validation
+  number = 10,
+  # Use 10 partitions
+  repeats = 2
+)             # Repeat 2 times
+
+# Set required parameters for the model type we are using**
+tune_grid = expand.grid(cp = c(0.015))
+
+
+# Use the train() function to create the model
+validated_tree <- train(
+  Survived ~ Sex + Pclass + Fare  + Age   ,
+  data = train_data,
+  # Data set
+  method = "rpart",
+  # Model type(decision tree)
+  trControl = train_control,
+  # Model control options
+  tuneGrid = tune_grid,
+  # Required model parameters
+  maxdepth = 5,
+  # Additional parameters***
+  minbucket = 5
+)
+
+validated_tree         # View a summary of the model
