@@ -1,0 +1,227 @@
+---
+title: "Trabajo Práctico: Árboles de Clasificación y Regresión"
+authors:
+  - name: "Miguel Garrone"
+    affiliations: "Universidad Austral"
+  - name: "Lucía Tamplin"
+  - name: "Milagros Terán"
+  - name: "Martín Ceriotti"
+
+format:
+  html:
+    toc: TRUE
+    lang: es
+    embed-resources: true
+
+editor: visual
+---
+
+# Análisis descriptivo de los datos
+
+Para comenzar el análisis, se observaron algunas variables de interés y se convirtieron a factores aquellas que podían utilizarse para luego crear un Árbol de Clasificación y Regresión.
+
+```{r}
+#| label: lecturadatos
+#| message: false
+#| warning: false
+#| include: false
+#| paged-print: false
+library(readr)
+library(dplyr)
+library(rpart)
+library(rpart.plot)
+library(caret)   
+
+data  <- read_csv("datos/titanic.csv")
+```
+
+Como primer paso, se decidió observar el género de los pasajeros y, además, se observó esta misma variable según la variable "Survived". La misma indica si el pasajero falleció en el accidente o no.
+
+```{r}
+#| label: descripcion1
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+
+data$PassengerId <- NULL # Quitamos PassengerId porque no lo usamos.
+data$Pclass <- ordered(data$Pclass, levels = c("3", "2", "1"))
+
+table(data$Sex)
+
+# Para que se entienda mejor, cambiamos 1 y 0 por Murio / Sobrevivio.
+# Convertimos a factor las variables que nos interesen para el análisis y se puedan usar como tales.
+
+new_Survived <- factor(data$Survived)
+levels(new_Survived) <- c("Murio", "Sobrevivio")
+data$Survived <-  new_Survived
+table(data$Survived)
+table(data$Survived, data$Sex)
+```
+
+En segundo lugar, se decidió observar la distribución de la variable "Age" la cual indica la edad de los pasajeros. Además, se realizó la imputación de los valores faltantes por el valor mediano (Mediana = 28,00 años).
+
+```{r}
+#| label: descripcion2
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+
+summary(data$Age)
+hist(data$Age, breaks = 20)
+
+# Como tenemos muchos valores nulos, podemos usar el valor mediano
+# para imputarlos. (Mediana = 28.00 )
+
+na_logical <- is.na(data$Age)
+
+new_age <- ifelse(na_logical, 28.00, data$Age)
+data$Age <- new_age
+```
+
+Además, se observó la distribución de las tarifas y resultó de interés observar el/la pasajero/a que tenía el valor máximo de esta variable.
+
+```{r}
+#| label: descripcion3
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+
+#Tarifa
+boxplot(data$Fare)
+
+# Buscamos el valor mas alto.
+high_roller_index <- which.max(data$Fare)
+high_roller_index                   
+data[high_roller_index, ] 
+```
+
+# Árboles de Clasificación y Regresión
+
+Para realizar el modelo, se decidió utilizar el 80% de los datos como entrenamiento y el 20% restante se utilizó para probar la exactitud del modelo.
+
+```{r}
+#| label: descripcion4
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+
+set.seed(42) # Fija la semilla para que la división sea reproducible
+train_index <- createDataPartition(data$Survived, p = 0.8, list = FALSE)
+
+# Creamos los subconjuntos.
+train_data <- data[train_index, ]
+test_data  <- data[-train_index, ]
+
+# Configuramos las opciones de arbol.
+
+options(repr.plot.width = 6, repr.plot.height = 5)
+```
+
+Como primer paso, se decidió realizar un árbol con la variable "Sex" para poder interpretarlo de manera simple. A continuación, se puede observar el gráfico:
+
+```{r}
+#| label: descripcion5
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+
+gender_tree <- rpart(Survived ~  Sex, data = train_data)
+# Dibujo del Arbol
+
+prp(gender_tree,
+    extra = 102,
+    type = 2,
+    xsep = "/")
+```
+
+En el gráfico se puede observar que se tiene un total de 714 pasajeros, de los cuales 440 han fallecido. Además, se puede ver que 365 de los pasajeros que murieron eran del género masculino y 75 eran del género femenino. Sin embargo, del total de pasajeros, el 63% eran hombres y 37% mujeres.
+
+Por último, se decidió realizar un modelo más complejo, teniendo en cuenta el género, la clase, la tarifa y la edad de los pasajeros.
+
+```{r}
+#| label: descripcion6
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+
+complex_tree <- rpart(
+  Survived ~ Sex + Pclass + Fare  + Age,
+  cp = 0.015,
+  data = train_data
+)
+
+options(repr.plot.width = 4, repr.plot.height = 4)
+
+prp(complex_tree,
+    extra = 102,
+    type = 2,
+    xsep = "/")
+
+printcp(complex_tree)
+plotcp(complex_tree, upper = "splits")
+```
+
+Las salidas anteriores presentan:
+
+-   El error de cross-validation vs. tamaño del árbol.
+-   El punto donde el árbol deja de mejorar.
+
+A continuación, se realizan las predicciones del modelo elegido:
+
+```{r}
+#| label: descripcion7
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+
+# Predicciones.
+
+train_preds <- predict(complex_tree, newdata = test_data, type = "class")
+confusionMatrix(factor(train_preds), factor(test_data$Survived))
+```
+
+En la salida anterior se puede observar que el modelo tiene una Accuracy de 0.8023 y un coeficiente Kappa de 0.5615.
+
+Accuracy es la proporción de predicciones totales que el modelo realizó correctamente. Mientras que, el Estadístico Kappa de Cohen mide la concordancia entre las predicciones del modelo y la verdad real, después de excluir la concordancia que se esperaría que ocurriera aleatoriamente.
+
+Como último paso, se realiza la validación cruzada del modelo:
+
+```{r}
+#| label: descripcion8
+#| echo: false
+#| message: false
+#| warning: false
+#| paged-print: false
+
+#VALIDACIÓN CRUZADA
+
+train_control <- trainControl(
+  method = "repeatedcv",
+  number = 10,
+  # Con 10 particiones.
+  repeats = 2
+) # repite 2 veces
+
+# Parametrizamos.
+tune_grid = expand.grid(cp = c(0.015))
+
+# Usamos la funcion de entrenamiento para crear el modelo
+validated_tree <- train(
+  Survived ~ Sex + Pclass + Fare  + Age   ,
+  data = train_data,
+  method = "rpart",
+  trControl = train_control,
+  tuneGrid = tune_grid,
+  maxdepth = 5,
+  minbucket = 5
+)
+
+validated_tree         #Resumen del modelo
+```
