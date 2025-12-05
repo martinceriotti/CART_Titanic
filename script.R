@@ -20,7 +20,7 @@ data$PassengerId <- NULL
 table(data$Survived, data$Sex)
 table(data$Sex)
 
-# Para que se entienda mejor, cambiamos 1 y 0 por si / no.
+# Para que se entienda mejor, cambiamos 1 y 0 por murio / sobrevivio.
 # Convertimos a factor las variables que nos interesen para el análisis y se puedan usar como tales.
 
 new_Survived <- factor(data$Survived)
@@ -36,16 +36,13 @@ table(data$Cabin)
 na_logical <- is.na(data$Cabin)
 data$Cabin <- ifelse(na_logical, 'X', data$Cabin)
 
-char_cabin <- as.character(data$Cabin) # Convert to character
+char_cabin <- as.character(data$Cabin) 
 
+nueva_cabina <- ifelse(char_cabin == "", "", substr(char_cabin, 1, 1))
+nueva_cabina <- factor(nueva_cabina)                
 
-new_Cabin <- ifelse(char_cabin == "", "", substr(char_cabin, 1, 1))
-
-new_Cabin <- factor(new_Cabin)                # Convert back to a factor
-
-table(new_Cabin)                             # Inspect the result as a table
-data$Cabin <- new_Cabin
-
+table(nueva_cabina)                             
+data$Cabin <- nueva_cabina
 data$Survived <-  new_Survived
 
 # Tratamiento de los nulos y outliers.
@@ -64,18 +61,15 @@ data$Age <- new_age
 
 boxplot(data$Fare)
 
-# Buscamos el valor mas alto.
+# Buscamos el valor mas alto como para revisar que pasa.
 
 high_roller_index <- which.max(data$Fare)
-
 high_roller_index
-
 data[high_roller_index, ]
 
 
 # ARBOLES
-
-# Dividimos 70% entrenamiento / 30% prueba.
+# Dividimos 80% entrenamiento / 20% prueba.
 
 set.seed(42) # Fija la semilla para que la división sea reproducible
 train_index <- createDataPartition(data$Survived, p = 0.8, list = FALSE)
@@ -84,11 +78,11 @@ train_index <- createDataPartition(data$Survived, p = 0.8, list = FALSE)
 train_data <- data[train_index, ]
 test_data  <- data[-train_index, ]
 
-
-
 # Configuramos las opciones de arbol.
 
 options(repr.plot.width = 6, repr.plot.height = 5)
+
+# Probamos un primer arbol sencillo, que eplique por sexo.
 
 gender_tree <- rpart(Survived ~  Sex, data = train_data)
 # Dibujo del Arbol
@@ -102,12 +96,13 @@ prp(gender_tree,
 # 324 eran del género masculino y 61 eran del género femenino.
 # Del total de pasajeros, el 63% eran hombres y 37% mujeres.
 
+# Luego armamos otro mas complejo, con sexo, class, fare, edad.
+
 complex_tree <- rpart(
   Survived ~ Sex + Pclass + Fare  + Age   ,
   cp = 0.015,
-  # Set complexity parameter*
   data = train_data
-)       # Use the titanic training data
+)
 
 options(repr.plot.width = 4, repr.plot.height = 4)
 
@@ -126,39 +121,32 @@ plotcp(complex_tree, upper = "splits")
 # Predicciones.
 
 train_preds <- predict(complex_tree, newdata = test_data, type = "class")
-
 confusionMatrix(factor(train_preds), factor(test_data$Survived))
-
 
 #CROSS VALIDATION
 
 # Create a trainControl object to control how the train function creates the model
+
 train_control <- trainControl(
   method = "repeatedcv",
-  # Use cross validation
   number = 10,
-  # Use 10 partitions
+  # Con 10 particiones.
   repeats = 2
-)             # Repeat 2 times
+) # repite 2 veces
 
-# Set required parameters for the model type we are using**
+# Parametrizamos.
 tune_grid = expand.grid(cp = c(0.015))
 
-
-# Use the train() function to create the model
+# Usamos la funcion de entrenamiento para crear el modelo
 validated_tree <- train(
   Survived ~ Sex + Pclass + Fare  + Age   ,
   data = train_data,
-  # Data set
   method = "rpart",
-  # Model type(decision tree)
   trControl = train_control,
-  # Model control options
   tuneGrid = tune_grid,
-  # Required model parameters
   maxdepth = 5,
-  # Additional parameters***
   minbucket = 5
 )
 
-validated_tree         # View a summary of the model
+validated_tree         #Resumen del modelo
+
