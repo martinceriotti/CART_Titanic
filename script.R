@@ -69,10 +69,10 @@ data[high_roller_index, ]
 
 
 # ARBOLES
-# Dividimos 80% entrenamiento / 20% prueba.
+# Dividimos 70% entrenamiento / 30% prueba.
 
 set.seed(42) # Fija la semilla para que la división sea reproducible
-train_index <- createDataPartition(data$Survived, p = 0.8, list = FALSE)
+train_index <- createDataPartition(data$Survived, p = 0.7, list = FALSE)
 
 # Creamos los subconjuntos.
 train_data <- data[train_index, ]
